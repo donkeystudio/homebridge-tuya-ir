@@ -198,37 +198,29 @@ export class TuyaAPIHelper {
                 }
             })
         } else {
-            this.log.debug("First getting brand id and remote id for given device...");
-            this._apiCall(this.apiHost + `/v1.0/infrareds/${deviceId}/remotes/${remoteId}/keys`, "GET", {}, (_body, err) => {
-                var body;
-                if (!err) {
-                    body = JSON.parse(_body);
-                    this.log.debug(`Found category id: ${body.result.category_id}, brand id: ${body.result.brand_id}, remote id: ${body.result.remote_index}`)
-                    this._apiCall(this.apiHost + `/v1.0/infrareds/${deviceId}/categories/${body.result.category_id}/brands/${body.result.brand_id}/remotes/${body.result.remote_index}/rules`, "GET", {}, (_body2, err2) => {
-                        let body2 = JSON.parse(_body2);
-                        if (!err2 && body2.success) {
-                            //let body2 = JSON.parse(_body2);
-                            let ret = { power: "", speed: "", swing: "" };
-                            for (var i = 0; i < body2.result.length; i++) {
-                                let k = body2.result[i];
-                                if (k.key_name == 'power') {
-                                    ret.power = k.key;
-                                } else if (k.key_name == 'fan_speed') {
-                                    ret.speed = k.key;
-                                } else if (k.key_name == 'swing') {
-                                    ret.swing = k.key;
-                                }
-                            }
-                            cb(ret);
-                        } else {
-                            this.log.error("Failed to invoke API", err2 || body2.msg);
-                            cb();
-                        }
-                    });
-                } else {
-                    this.log.error("Failed to invoke API", err);
-                    cb();
-                }
+            this._apiCall(this.apiHost + `/v2.0/infrareds/${deviceId}/remotes/${remoteId}/keys`, "GET", {}, (_body, err) => {
+                let body = JSON.parse(_body);
+                if (!err && body.success) {
+					let ret = { power: "", speedUp: "", swing: "", speedDown: "" };
+					for (var i = 0; i < body.result.key_list.length; i++) {
+						let k = body.result.key_list[i];
+						if (k.key_name == 'power') {
+							ret.power = k.key_id;
+						} else if (k.key_name == 'swing') {
+							ret.swing = k.key_id;
+						} else if (k.key_name == 'speed_up') {
+							ret.speedUp = k.key_id;
+						} else if (k.key_name == 'speed_down') {
+							ret.speedDown = k.key_id;
+						}
+					}
+					
+					this.log.info(`Power: ${ret.power} - Swing: ${ret.swing} - Speed Up: ${ret.speedUp} - Speed Down: ${ret.speedDown}`);
+					cb(ret);
+				} else {
+					this.log.error("Failed to invoke API", err || body.msg);
+					cb();
+				}
             })
         }
     }
