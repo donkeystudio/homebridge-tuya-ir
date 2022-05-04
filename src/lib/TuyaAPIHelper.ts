@@ -109,9 +109,12 @@ export class TuyaAPIHelper {
                         this.log.error(`Server returned error: '${bd.msg}'`)
                         devs.push({});
                     } else {
-                        bd.result.diy   = dev.diy;
-                        bd.result.model = dev.model;
-                        bd.result.brand = dev.brand;
+                        bd.result.diy		= dev.diy;
+                        bd.result.model		= dev.model;
+                        bd.result.brand		= dev.brand;
+                        bd.result.hasVSwing = dev.hasVSwing;
+                        bd.result.swingSave = dev.swingSave;
+                        bd.result.swingPower= dev.swingPower;
                         devs.push(bd.result);
                     }
                 }
@@ -201,7 +204,7 @@ export class TuyaAPIHelper {
             this._apiCall(this.apiHost + `/v2.0/infrareds/${deviceId}/remotes/${remoteId}/keys`, "GET", {}, (_body, err) => {
                 let body = JSON.parse(_body);
                 if (!err && body.success) {
-					let ret = { power: "", speedUp: "", swing: "", speedDown: "" };
+					let ret = { power: "", speedUp: "", swing: "", speedDown: "", vSwing: "" };
 					for (var i = 0; i < body.result.key_list.length; i++) {
 						let k = body.result.key_list[i];
 						if (k.key_name == 'power') {
@@ -212,10 +215,12 @@ export class TuyaAPIHelper {
 							ret.speedUp = k.key_id;
 						} else if (k.key_name == 'speed_down') {
 							ret.speedDown = k.key_id;
+						} else if (k.key_name == 'vertical_swing') {
+						    ret.vSwing = k.key_id;
 						}
 					}
 					
-					this.log.info(`Power: ${ret.power} - Swing: ${ret.swing} - Speed Up: ${ret.speedUp} - Speed Down: ${ret.speedDown}`);
+					this.log.info(`Power: ${ret.power} - Swing: ${ret.swing} - Speed Up: ${ret.speedUp} - Speed Down: ${ret.speedDown} - Vertical Swing: ${ret.vSwing}`);
 					cb(ret);
 				} else {
 					this.log.error("Failed to invoke API", err || body.msg);

@@ -22,14 +22,20 @@ export class Config {
 }
 
 export class Device {
-    public id: string = "";
-    public diy: boolean = false;
-    public model: string = "Unknown";
-    public brand: string = "Unknown";
+    public id:			string 	= "";
+    public diy:			boolean = false;
+    public model:		string 	= "Unknown";
+    public brand:		string 	= "Unknown";
+    public hasVSwing: 	boolean = false;
+    public swingSave:	boolean = false;
+    public swingPower:	boolean = false;
     constructor(dev) {
-        this.id    = dev.id;
-        this.diy   = dev.diy;
-        this.model = dev.model;
-        this.brand = dev.brand;
+        this.id    		= dev.id;
+        this.diy   		= dev.diy;
+        this.model 		= dev.model;
+        this.brand 		= dev.brand;
+        this.hasVSwing 	= dev.hasVSwing;
+        this.swingSave	= dev.swingSave;
+        this.swingPower = dev.swingPower;
     }
 }

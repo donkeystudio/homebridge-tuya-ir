@@ -109,6 +109,24 @@
                     "required": false,
                     "default": "Unknown",
                     "description": "Brand of the Remote"
+                  },
+                  "hasVSwing":{
+                    "title": "Vertical Swing",
+                    "type": "boolean",
+                    "required": true,
+                    "default": false
+                  },
+                  "swingSave":{
+                    "title": "Can this fan remember swing mode?",
+                    "type": "boolean",
+                    "required": true,
+                    "default": false
+                  },
+                  "swingPower":{
+                    "title": "Can Swing/Speed button turn on the fan?",
+                    "type": "boolean",
+                    "required": true,
+                    "default": false
                   }
                 }
               },

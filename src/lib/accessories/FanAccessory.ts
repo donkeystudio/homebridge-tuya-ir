@@ -9,20 +9,21 @@ import { TuyaAPIHelper } from '../TuyaAPIHelper';
  * Each accessory may expose multiple services of different service types.
  */
 export class FanAccessory {
-    private service: Service;
+    private servicePower: Service;
     private serviceSpeedUp: Service;
     private serviceSpeedDown: Service;
+    private serviceVSwing: Service;
+    private serviceHSwing: Service;
 
     /**
      * These are just used to create a working example
      * You should implement your own code to track the state of your accessory
      */
     private fanStates = {
-        On: this.platform.Characteristic.Active.INACTIVE,
-        speed: 50,
-        fan: 0,
-        swing: this.platform.Characteristic.SwingMode.SWING_DISABLED,
-        speedBeingChanged: false
+        On: false,
+        swing: false,
+        speedBeingChanged: false,
+        verticalSwing: false
     };
 
     private parentId: string = "";
@@ -31,12 +32,20 @@ export class FanAccessory {
     private speedUpCommand: number = 9367;
     private speedDownCommand: number = 9367;
     private swingCommand: number = 9372;
+    private verticalSwingCommand: number = 9372;
+    private swingSave: boolean = false;
+    private hasVSwing: boolean = false;
+    private swingPower:boolean = false;
 
     constructor(
         private readonly platform: TuyaIRPlatform,
         private readonly accessory: PlatformAccessory,
     ) {
-        this.parentId = accessory.context.device.ir_id;
+        this.parentId	= accessory.context.device.ir_id;
+        this.swingSave 	= accessory.context.device.swingSave;
+        this.hasVSwing 	= accessory.context.device.hasVSwing;
+        this.swingPower	= accessory.context.device.swingPower;
+        
         this.tuya = TuyaAPIHelper.Instance(new Config(platform.config.client_id, platform.config.secret, platform.config.region, platform.config.deviceId, platform.config.devices), platform.log);
         // set accessory information
         this.accessory.getService(this.platform.Service.AccessoryInformation)!
@@ -45,27 +54,26 @@ export class FanAccessory {
             .setCharacteristic(this.platform.Characteristic.SerialNumber, accessory.context.device.id);
 
         /********
-        * Create Fan Service
+        * Create Power Service
         */
-        this.service = this.accessory.getService(this.platform.Service.Fanv2) || this.accessory.addService(this.platform.Service.Fanv2);
+        this.servicePower = this.accessory.getService(this.platform.Service.Switch) || this.accessory.addService(this.platform.Service.Switch);
 
-        // set the service name, this is what is displayed as the default name on the Home app
-        // in this example we are using the name we stored in the `accessory.context` in the `discoverDevices` method.
-        this.service.setCharacteristic(this.platform.Characteristic.Name, accessory.context.device.name);
-        this.service.subtype = "Fan";
-        // each service must implement at-minimum the "required characteristics" for the given service type
-        // see https://developers.homebridge.io/#/service/Lightbulb
+        this.servicePower.setCharacteristic(this.platform.Characteristic.Name, accessory.context.device.name);
+        this.servicePower.subtype = "Fan";
 
-        // register handlers for the On/Off Characteristic
-        this.service.getCharacteristic(this.platform.Characteristic.Active)
-            .onSet(this.setOn.bind(this))                // SET - bind to the `setOn` method below
-            .onGet(this.getOn.bind(this));               // GET - bind to the `getOn` method below
+        this.servicePower.getCharacteristic(this.platform.Characteristic.On)
+            .onSet(this.setOn.bind(this))
+            .onGet(this.getOn.bind(this));
 
-        this.service.getCharacteristic(this.platform.Characteristic.RotationSpeed)
-            .onSet(this.setRotationSpeed.bind(this))                // SET - bind to the `setRotationSpeed` method below
-            .onGet(this.getRotationSpeed.bind(this));               // GET - bind to the `getRotationSpeed` method below
+		/********
+        * Create Horizontal Swing Service
+        */
+        this.serviceHSwing = this.accessory.getService(accessory.context.device.name + "Swing") || this.accessory.addService(this.platform.Service.Switch, accessory.context.device.name + "Swing", "Swing");
 
-        this.service.getCharacteristic(this.platform.Characteristic.SwingMode)
+        this.serviceHSwing.setCharacteristic(this.platform.Characteristic.Name, "Swing");
+        this.serviceHSwing.subtype = "Swing";
+
+        this.serviceHSwing.getCharacteristic(this.platform.Characteristic.On)
             .onSet(this.setSwingMode.bind(this))
             .onGet(this.getSwingMode.bind(this));
 
@@ -74,38 +82,45 @@ export class FanAccessory {
         */
         this.serviceSpeedUp = this.accessory.getService(accessory.context.device.name + "Speed Up") || this.accessory.addService(this.platform.Service.Switch, accessory.context.device.name + "Speed Up", "Speed Up");
 
-        // set the service name, this is what is displayed as the default name on the Home app
-        // in this example we are using the name we stored in the `accessory.context` in the `discoverDevices` method.
         this.serviceSpeedUp.setCharacteristic(this.platform.Characteristic.Name, "Speed Up");
         this.serviceSpeedUp.subtype = "Speed Up";
 
-        // register handlers for the On/Off Characteristic
         this.serviceSpeedUp.getCharacteristic(this.platform.Characteristic.On)
-            .onSet(this.setRotationSpeedUp.bind(this))                // SET - bind to the `setOn` method below
-            .onGet(this.getRotationSpeedUpDown.bind(this));           // GET - bind to the `getOn` method below
+            .onSet(this.setRotationSpeedUp.bind(this))
+            .onGet(this.getRotationSpeedUpDown.bind(this));
         
         /********
         * Create Speed Down service
         */
         this.serviceSpeedDown = this.accessory.getService(accessory.context.device.name + "Speed Down") || this.accessory.addService(this.platform.Service.Switch, accessory.context.device.name + "Speed Down", "Speed Down");
-
-        // set the service name, this is what is displayed as the default name on the Home app
-        // in this example we are using the name we stored in the `accessory.context` in the `discoverDevices` method.
+        
         this.serviceSpeedDown.setCharacteristic(this.platform.Characteristic.Name, "Speed Down");
         this.serviceSpeedDown.subtype = "Speed Down";
 
-        // register handlers for the On/Off Characteristic
         this.serviceSpeedDown.getCharacteristic(this.platform.Characteristic.On)
-            .onSet(this.setRotationSpeedDown.bind(this))                // SET - bind to the `setOn` method below
-            .onGet(this.getRotationSpeedUpDown.bind(this));             // GET - bind to the `getOn` method below
+            .onSet(this.setRotationSpeedDown.bind(this))
+            .onGet(this.getRotationSpeedUpDown.bind(this));
+            
+        /********
+        * Create Vertical Swing service
+        */
+        this.serviceVSwing = this.accessory.getService(accessory.context.device.name + "Vertical Swing") || this.accessory.addService(this.platform.Service.Switch, accessory.context.device.name + "Vertical Swing", "Vertical Swing");
+        
+		this.serviceVSwing.setCharacteristic(this.platform.Characteristic.Name, "Vertical Swing");
+		this.serviceVSwing.subtype = "Vertical Swing";
+
+		this.serviceVSwing.getCharacteristic(this.platform.Characteristic.On)
+			.onSet(this.setVerticalSwing.bind(this))
+			.onGet(this.getVerticalSwing.bind(this));
             
         setTimeout(() => {
             this.tuya.getFanCommands(this.parentId, accessory.context.device.id, accessory.context.device.diy, (commands) => {
                 if (commands) {
-                    this.powerCommand 	  = commands.power;
-                    this.speedUpCommand   = commands.speedUp;
-                    this.speedDownCommand = commands.speedDown;
-                    this.swingCommand 	  = commands.swing;
+                    this.powerCommand 	  		= commands.power;
+                    this.speedUpCommand   		= commands.speedUp;
+                    this.speedDownCommand 		= commands.speedDown;
+                    this.swingCommand 	  		= commands.swing;
+                    this.verticalSwingCommand 	= commands.vSwing;
                 } else {
                     this.platform.log.warn(`Failed to get commands for the fan. Defaulting to standard values. These may not work.`);
                 }
@@ -118,84 +133,39 @@ export class FanAccessory {
         
     }
 
-    /**
-     * Handle "SET" requests from HomeKit
-     * These are sent when the user changes the state of an accessory, for example, turning on a Light bulb.
-     */
-    async setOn(value: CharacteristicValue) {
-        // implement your own code to turn your device on/off
-        if (this.fanStates.On != (value as number)) {
-            var command = this.powerCommand;
+    async setOn(value: CharacteristicValue) 
+    {
+        var command = this.powerCommand;
 
-            this.tuya.sendFanCommand(this.parentId, this.accessory.context.device.id, command, this.accessory.context.device.diy, (body) => {
-                if (!body.success) {
-                    this.platform.log.error(`Failed to change Fan status due to error ${body.msg}`);
-                } else {
-                    this.platform.log.info(`${this.accessory.displayName} is now ${(value as number) == 0 ? 'Off' : 'On'}`);
-                    
-                    this.fanStates.swing = this.platform.Characteristic.SwingMode.SWING_DISABLED;
-                    this.service.updateCharacteristic(this.platform.Characteristic.SwingMode, this.fanStates.swing);
-                    
-                    this.fanStates.On = value as number;
-                    if (this.fanStates.On) {
-		                this.resetSpeedUI();
-                    }
-
-                }
-            });
-        }
+		this.tuya.sendFanCommand(this.parentId, this.accessory.context.device.id, command, this.accessory.context.device.diy, (body) => {
+			if (!body.success) {
+				this.platform.log.error(`Failed to change Fan status due to error ${body.msg}`);
+			} else {
+				this.platform.log.info(`${this.accessory.displayName} is now ${(value as number) == 0 ? 'Off' : 'On'}`);
+				
+				this.fanStates.On = value as boolean;
+				
+				//Try to enable swing after turning on the fan
+				if (!this.swingSave)
+				{
+					if (this.fanStates.On)
+					{
+						this.setSwingActive();
+					}
+					else
+					{
+						this.fanStates.swing = false;
+						//Set and execute Swing
+						this.serviceHSwing.updateCharacteristic(this.platform.Characteristic.On, this.fanStates.swing);	
+					}
+				}
+				
+			}
+		});
     }
 
-    /**
-     * Handle the "GET" requests from HomeKit
-     * These are sent when HomeKit wants to know the current state of the accessory, for example, checking if a Light bulb is on.
-     *
-     * GET requests should return as fast as possbile. A long delay here will result in
-     * HomeKit being unresponsive and a bad user experience in general.
-     *
-     * If your device takes time to respond you should update the status of your device
-     * asynchronously instead using the `updateCharacteristic` method instead.
-  
-     * @example
-     * this.service.updateCharacteristic(this.platform.Characteristic.On, true)
-     */
     async getOn(): Promise<CharacteristicValue> {
         return this.fanStates.On;
-    }
-    
-    async getRotationSpeed(): Promise<CharacteristicValue> {
-        return this.fanStates.speed;
-    }
-
-    setRotationSpeed(value: CharacteristicValue) 
-    {
-    	if (this.fanStates.speedBeingChanged)
-	    	return;
-	    	
-        this.fanStates.speedBeingChanged = true;
-    	let speedNew = value as number;//this.service.getCharacteristic(this.platform.Characteristic.RotationSpeed).value as number;
-    	this.platform.log.info(`Speed is ${speedNew}`);
-    	if (speedNew == 0)
-    	{
-    		this.setOn(this.platform.Characteristic.Active.INACTIVE);
-    		this.fanStates.speedBeingChanged = false;
-    	}
-        else if (speedNew != this.fanStates.speed) {
-            var command  = speedNew < this.fanStates.speed ? this.speedDownCommand : this.speedUpCommand;
-
-            this.tuya.sendFanCommand(this.parentId, this.accessory.context.device.id, command, this.accessory.context.device.diy, (body) => {
-                if (!body.success) {
-                    this.platform.log.error(`Failed to change Fan speed due to error ${body.msg}`);
-                } else {
-                    this.platform.log.info(`${this.accessory.displayName} speed is updated.`);
-					this.setFanActive();
-                	this.resetSpeedUI();
-                }
-                this.fanStates.speedBeingChanged = false;
-            }); 
-        }
-        else
-            this.fanStates.speedBeingChanged = false;
     }
 
     async getRotationSpeedUpDown(): Promise<CharacteristicValue> {
@@ -204,15 +174,25 @@ export class FanAccessory {
 
     async setRotationSpeedUp(value: CharacteristicValue) {
 
-    	var command  = this.speedUpCommand
+    	var command  = this.speedUpCommand;
 
         this.tuya.sendFanCommand(this.parentId, this.accessory.context.device.id, command, this.accessory.context.device.diy, (body) => {
             if (!body.success) {
                 this.platform.log.error(`Failed to change Fan speed due to error ${body.msg}`);
             } else {
                 this.platform.log.info(`${this.accessory.displayName} speed is updated.`);
-				this.setFanActive();
-                this.resetSpeedUI();
+                
+				if (this.swingPower && !this.fanStates.On)
+				{
+					if (!this.swingSave)
+					{
+						this.setSwingActive();
+					}
+					else
+					{
+						this.updateFanActive();
+					}
+				}
                 this.serviceSpeedUp.updateCharacteristic(this.platform.Characteristic.On, false);
             }
         }); 
@@ -220,15 +200,24 @@ export class FanAccessory {
     
     async setRotationSpeedDown(value: CharacteristicValue) {
 
-    	var command  = this.speedDownCommand
+    	var command  = this.speedDownCommand;
 
         this.tuya.sendFanCommand(this.parentId, this.accessory.context.device.id, command, this.accessory.context.device.diy, (body) => {
             if (!body.success) {
                 this.platform.log.error(`Failed to change Fan speed due to error ${body.msg}`);
             } else {
                 this.platform.log.info(`${this.accessory.displayName} speed is updated.`);
-                this.setFanActive();
-                this.resetSpeedUI();
+                if (this.swingPower && !this.fanStates.On)
+				{
+					if (!this.swingSave)
+					{
+						this.setSwingActive();
+					}
+					else
+					{
+						this.updateFanActive();
+					}
+				}
                 this.serviceSpeedDown.updateCharacteristic(this.platform.Characteristic.On, false);
             }
         }); 
@@ -247,22 +236,45 @@ export class FanAccessory {
                 this.platform.log.error(`Failed to change Fan swing due to error ${body.msg}`);
             } else {
                 this.platform.log.info(`${this.accessory.displayName} swing is updated.`);
-                this.fanStates.swing = (value as number);
-                this.setFanActive();
-                this.resetSpeedUI();
+                this.fanStates.swing = value as boolean;
+                if (this.swingPower)
+	                this.updateFanActive();
             }
         });
     }
     
-    setFanActive()
-    {
-    	this.fanStates.On = this.platform.Characteristic.Active.ACTIVE;
-		this.service.updateCharacteristic(this.platform.Characteristic.Active, this.fanStates.On);
+    async getVerticalSwing(): Promise<CharacteristicValue> {
+        return this.fanStates.verticalSwing;
+    }
+
+    async setVerticalSwing(value: CharacteristicValue) {
+		if (this.hasVSwing)
+		{
+			var command = this.verticalSwingCommand;
+
+			this.tuya.sendFanCommand(this.parentId, this.accessory.context.device.id, command, this.accessory.context.device.diy, (body) => {
+				if (!body.success) {
+					this.platform.log.error(`Failed to change Fan swing due to error ${body.msg}`);
+				} else {
+					this.platform.log.info(`${this.accessory.displayName} swing is updated.`);
+					this.fanStates.verticalSwing = value as boolean;
+					if (this.swingPower)
+						this.updateFanActive();
+				}
+			});
+		}
     }
     
-    resetSpeedUI()
+    updateFanActive()
     {
-		this.fanStates.speed = 50;
-		this.service.updateCharacteristic(this.platform.Characteristic.RotationSpeed, 50);
+    	this.fanStates.On = true;
+		this.servicePower.updateCharacteristic(this.platform.Characteristic.On, this.fanStates.On);
+    }
+    
+    setSwingActive()
+    {
+    	this.fanStates.swing = true;
+    	//Set and execute Swing
+		this.serviceHSwing.setCharacteristic(this.platform.Characteristic.On, this.fanStates.swing);		
     }
 }
