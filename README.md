@@ -6,14 +6,13 @@
 </p>
 
 # Homebridge Tuya IR
-[![npm](https://img.shields.io/npm/v/homebridge-tuya-ir.svg)](https://www.npmjs.com/package/homebridge-tuya-ir)
-![GitHub](https://img.shields.io/github/license/prasad-edlabadka/homebridge-tuya-ir)
-[![npm](https://img.shields.io/npm/dt/homebridge-tuya-ir.svg)](https://www.npmjs.com/package/homebridge-tuya-ir)
-![GitHub issues](https://img.shields.io/github/issues-raw/prasad-edlabadka/homebridge-tuya-ir)
-![GitHub pull requests](https://img.shields.io/github/issues-pr-raw/prasad-edlabadka/homebridge-tuya-ir)
+_Forked from [prasad-edlabadka/homebridge-tuya-ir](https://github.com/prasad-edlabadka/homebridge-tuya-ir)_
 
-![GitHub contributors](https://img.shields.io/github/contributors-anon/prasad-edlabadka/homebridge-tuya-ir)
-![GitHub last commit](https://img.shields.io/github/last-commit/prasad-edlabadka/homebridge-tuya-ir)
+
+![GitHub](https://img.shields.io/github/license/donkeystudio/homebridge-tuya-ir)
+![GitHub issues](https://img.shields.io/github/issues-raw/donkeystudio/homebridge-tuya-ir)
+![GitHub pull requests](https://img.shields.io/github/issues-pr-raw/donkeystudio/homebridge-tuya-ir)
+![GitHub last commit](https://img.shields.io/github/last-commit/donkeystudio/homebridge-tuya-ir)
 
 
 Control your Tuya Smart IR based devices in HomeKit. Also works with Smart Home IR Blaster. You can add multiple Smart IR device to single configuration.
@@ -21,19 +20,19 @@ Control your Tuya Smart IR based devices in HomeKit. Also works with Smart Home 
 ## Supported Devices
 * Air Conditioner (Only pre-configured vendor. No DIY devices)
 * Fan (Pre-configured and DIY devices)
+  * Fan Remote Settings (The below settings are exclusively for Fan remote)
+    * *Vertical Swing*: If the fan supports vertical swing. _Default is No._
+    * *Can this fan remember swing mode*: For some fan models (e.g. Dyson Cool), horitzontal swing status is not remembered after turning off the fan. _Default is No._
+    * *Can Swing/Speed button turn on the fan*: For some fan models (e.g. Dyson Cool), you can turn on the fan by pressing Speed or Swing buttons. _Default is No._
+  * Custom keys mapping (When setting up the remote via Tuya/Smart Life apps):
+    * *speed_up*: Increase fan speed
+    * *speed_down*: Decrease fan speed
+    * *vertical_swing*: Enable vertical swing (Only works if "Vertical Swing" is checked)
 * All other Pre-configured remotes will be added as switch to turn them on and off only. No other feature. (No DIY devices)
 
 ## Installation Instructions
+You will need to build and install this plugin manually as it is not yet published to NPM
 
-#### Option 1: Install via Homebridge Config UI X:
-
-Search for "Tuya IR" in [homebridge-config-ui-x](https://github.com/oznu/homebridge-config-ui-x) and install `homebridge-tuya-ir`.
-
-#### Option 2: Manually Install:
-
-```
-sudo npm install -g homebridge-tuya-ir
-```
 ## Add Smart IR and Remotes
 Download Tuya Smart app and add your Smart IR device based on OEM documentation and add remotes you want to control using the Smart IR device.
 
