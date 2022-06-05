@@ -6,7 +6,7 @@
 </p>
 
 # Homebridge Tuya IR
-_Forked from [prasad-edlabadka/homebridge-tuya-ir](https://github.com/prasad-edlabadka/homebridge-tuya-ir)_
+_Forked from [prasad-edlabadka/homebridge-tuya-ir](https://github.com/prasad-edlabadka/homebridge-tuya-ir) to improve Fan control experience._
 
 
 ![GitHub](https://img.shields.io/github/license/donkeystudio/homebridge-tuya-ir)
