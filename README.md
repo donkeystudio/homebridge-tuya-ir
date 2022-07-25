@@ -15,6 +15,7 @@ _Forked from [prasad-edlabadka/homebridge-tuya-ir](https://github.com/prasad-edl
 ![GitHub last commit](https://img.shields.io/github/last-commit/donkeystudio/homebridge-tuya-ir)
 
 
+
 Control your Tuya Smart IR based devices in HomeKit. Also works with Smart Home IR Blaster. You can add multiple Smart IR device to single configuration.
 
 ## Supported Devices
@@ -28,6 +29,7 @@ Control your Tuya Smart IR based devices in HomeKit. Also works with Smart Home 
     * *speed_up*: Increase fan speed
     * *speed_down*: Decrease fan speed
     * *vertical_swing*: Enable vertical swing (Only works if "Vertical Swing" is checked)
+* DIY Devices. Each learned button will be added a switch.
 * All other Pre-configured remotes will be added as switch to turn them on and off only. No other feature. (No DIY devices)
 
 ## Installation Instructions
@@ -65,6 +67,38 @@ Repeat the steps for all the services in the following image
 > Manual
 
 1. Edit the config.json file to add your devices and parameters. 
+2. Sample Configuration
+```
+"platforms": [
+    {
+        "name": "TuyaIR",
+        "tuyaAPIClientId": "Your Tuya Client ID",
+        "tuyaAPISecret": "Your Tuya API Secret",
+        "deviceRegion": "eu",
+        "smartIR": [
+            {
+                "deviceId": "xxxxxxx",
+                "autoFetchRemotesFromServer": false,
+                "configuredRemotes": [
+                    {
+                        "id": "xxxxxxx",
+                        "diy": false,
+                        "model": "Sample",
+                        "brand": "Sample Brand"
+                    },
+                    {
+                        "id": "xxxxxx",
+                        "diy": false,
+                        "model": "Sample",
+                        "brand": "Sample Brand"
+                    }
+                ]
+            }
+        ],
+        "platform": "TuyaIR"
+    }
+]
+```
 2. Restart Homebridge
 
 ## Known Issues

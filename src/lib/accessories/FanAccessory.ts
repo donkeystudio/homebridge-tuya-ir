@@ -1,24 +1,23 @@
 import { Service, PlatformAccessory, CharacteristicValue } from 'homebridge';
 import { TuyaIRPlatform } from '../../platform';
-import { Config } from '../Config';
-import { TuyaAPIHelper } from '../TuyaAPIHelper';
+import { BaseAccessory } from './BaseAccessory';
+import { APIInvocationHelper } from '../api/APIInvocationHelper';
 
 /**
  * Fan Accessory
  * An instance of this class is created for each accessory your platform registers
  * Each accessory may expose multiple services of different service types.
  */
-export class FanAccessory {
+
+export class FanAccessory extends BaseAccessory {
     private servicePower: Service;
     private serviceSpeedUp: Service;
     private serviceSpeedDown: Service;
     private serviceVSwing: Service;
     private serviceHSwing: Service;
+    private sendCommandAPIURL: string;
+    private sendCommandKey: string;
 
-    /**
-     * These are just used to create a working example
-     * You should implement your own code to track the state of your accessory
-     */
     private fanStates = {
         On: false,
         swing: false,
@@ -26,8 +25,6 @@ export class FanAccessory {
         verticalSwing: false
     };
 
-    private parentId: string = "";
-    private tuya: TuyaAPIHelper;
     private powerCommand: number = 1;
     private speedUpCommand: number = 9367;
     private speedDownCommand: number = 9367;
@@ -41,15 +38,16 @@ export class FanAccessory {
         private readonly platform: TuyaIRPlatform,
         private readonly accessory: PlatformAccessory,
     ) {
-        this.parentId	= accessory.context.device.ir_id;
+        super(platform, accessory);
+        this.sendCommandAPIURL = accessory.context.device.diy ? `${this.configuration.apiHost}/v1.0/infrareds/${this.parentId}/remotes/${accessory.context.device.id}/learning-codes` : `${this.configuration.apiHost}/v1.0/infrareds/${this.parentId}/remotes/${accessory.context.device.id}/raw/command`;
+        this.sendCommandKey = accessory.context.device.diy ? 'code' : 'raw_key';
+
         this.swingSave 	= accessory.context.device.swingSave;
         this.hasVSwing 	= accessory.context.device.hasVSwing;
         this.swingPower	= accessory.context.device.swingPower;
-        
-        this.tuya = TuyaAPIHelper.Instance(new Config(platform.config.client_id, platform.config.secret, platform.config.region, platform.config.deviceId, platform.config.devices), platform.log);
-        // set accessory information
-        this.accessory.getService(this.platform.Service.AccessoryInformation)!
-            .setCharacteristic(this.platform.Characteristic.Manufacturer, accessory.context.device.brand)
+
+        this.accessory?.getService(this.platform.Service.AccessoryInformation)
+            ?.setCharacteristic(this.platform.Characteristic.Manufacturer, accessory.context.device.brand)
             .setCharacteristic(this.platform.Characteristic.Model, accessory.context.device.model)
             .setCharacteristic(this.platform.Characteristic.SerialNumber, accessory.context.device.id);
 
@@ -113,19 +111,17 @@ export class FanAccessory {
 			.onSet(this.setVerticalSwing.bind(this))
 			.onGet(this.getVerticalSwing.bind(this));
             
-        setTimeout(() => {
-            this.tuya.getFanCommands(this.parentId, accessory.context.device.id, accessory.context.device.diy, (commands) => {
-                if (commands) {
-                    this.powerCommand 	  		= commands.power;
-                    this.speedUpCommand   		= commands.speedUp;
-                    this.speedDownCommand 		= commands.speedDown;
-                    this.swingCommand 	  		= commands.swing;
-                    this.verticalSwingCommand 	= commands.vSwing;
-                } else {
-                    this.platform.log.warn(`Failed to get commands for the fan. Defaulting to standard values. These may not work.`);
-                }
-            })
-        }, 0);
+        this.getFanCommands(this.parentId, accessory.context.device.id, accessory.context.device.diy, (commands) => {
+            if (commands) {
+                this.powerCommand 	  		= commands.power;
+                this.speedUpCommand   		= commands.speedUp;
+                this.speedDownCommand 		= commands.speedDown;
+                this.swingCommand 	  		= commands.swing;
+                this.verticalSwingCommand 	= commands.vSwing;
+            } else {
+                this.platform.log.warn(`Failed to get commands for the fan. Defaulting to standard values. These may not work.`);
+            }
+        })
     }
 
     setup(platform: TuyaIRPlatform, accessory: PlatformAccessory) {
@@ -137,7 +133,7 @@ export class FanAccessory {
     {
         var command = this.powerCommand;
 
-		this.tuya.sendFanCommand(this.parentId, this.accessory.context.device.id, command, this.accessory.context.device.diy, (body) => {
+		this.sendFanCommand(command, (body) => {
 			if (!body.success) {
 				this.platform.log.error(`Failed to change Fan status due to error ${body.msg}`);
 			} else {
@@ -176,9 +172,9 @@ export class FanAccessory {
 
     	var command  = this.speedUpCommand;
 
-        this.tuya.sendFanCommand(this.parentId, this.accessory.context.device.id, command, this.accessory.context.device.diy, (body) => {
+        this.sendFanCommand(command, (body) => {
             if (!body.success) {
-                this.platform.log.error(`Failed to change Fan speed due to error ${body.msg}`);
+                this.log.error(`Failed to change Fan speed due to error ${body.msg}`);
             } else {
                 this.platform.log.info(`${this.accessory.displayName} speed is updated.`);
                 
@@ -202,7 +198,7 @@ export class FanAccessory {
 
     	var command  = this.speedDownCommand;
 
-        this.tuya.sendFanCommand(this.parentId, this.accessory.context.device.id, command, this.accessory.context.device.diy, (body) => {
+        this.sendFanCommand(command, (body) => {
             if (!body.success) {
                 this.platform.log.error(`Failed to change Fan speed due to error ${body.msg}`);
             } else {
@@ -220,20 +216,17 @@ export class FanAccessory {
 				}
                 this.serviceSpeedDown.updateCharacteristic(this.platform.Characteristic.On, false);
             }
-        }); 
+        });
     }
 
-    async getSwingMode(): Promise<CharacteristicValue> {
+    private getSwingMode() {
         return this.fanStates.swing;
     }
 
-    async setSwingMode(value: CharacteristicValue) {
-        //Change swing
-        var command = this.swingCommand;
-
-        this.tuya.sendFanCommand(this.parentId, this.accessory.context.device.id, command, this.accessory.context.device.diy, (body) => {
+    private setSwingMode(value: CharacteristicValue) {
+        this.sendFanCommand(this.swingCommand, (body) => {
             if (!body.success) {
-                this.platform.log.error(`Failed to change Fan swing due to error ${body.msg}`);
+                this.log.error(`Failed to change Fan swing due to error ${body.msg}`);
             } else {
                 this.platform.log.info(`${this.accessory.displayName} swing is updated.`);
                 this.fanStates.swing = value as boolean;
@@ -252,7 +245,7 @@ export class FanAccessory {
 		{
 			var command = this.verticalSwingCommand;
 
-			this.tuya.sendFanCommand(this.parentId, this.accessory.context.device.id, command, this.accessory.context.device.diy, (body) => {
+			this.sendFanCommand(command, (body) => {
 				if (!body.success) {
 					this.platform.log.error(`Failed to change Fan swing due to error ${body.msg}`);
 				} else {
@@ -276,5 +269,79 @@ export class FanAccessory {
     	this.fanStates.swing = true;
     	//Set and execute Swing
 		this.serviceHSwing.setCharacteristic(this.platform.Characteristic.On, this.fanStates.swing);		
+    }
+
+    private getFanCommands(irDeviceId: string, remoteId: string, isDiy = false, callback) {
+        this.log.debug("Getting commands for Fan...");
+        if (isDiy) {
+            this.log.debug("Getting commands for DIY Fan...");
+            APIInvocationHelper.invokeTuyaIrApi(this.log, this.configuration, this.configuration.apiHost + `/v1.0/infrareds/${irDeviceId}/remotes/${remoteId}/learning-codes`, "GET", {}, (codesBody) => {
+                if (codesBody.success) {
+                    this.log.debug("Received codes. Returning all available codes");
+                    callback(this.getIRCodesFromAPIResponse(codesBody));
+                } else {
+                    this.log.error("Failed to get codes for DIY Fan", codesBody.msg);
+                    callback();
+                }
+            });
+        } else {
+            this.log.debug("First getting brand id and remote id for given device...");
+            APIInvocationHelper.invokeTuyaIrApi(this.log, this.configuration, `${this.configuration.apiHost}/v1.0/infrareds/${irDeviceId}/remotes/${remoteId}/keys`, 'GET', {}, (body) => {
+                if (body.success) {
+                    this.log.debug(`Found category id: ${body.result.category_id}, brand id: ${body.result.brand_id}, remote id: ${body.result.remote_index}`);
+                    APIInvocationHelper.invokeTuyaIrApi(this.log, this.configuration, this.configuration.apiHost + `/v1.0/infrareds/${irDeviceId}/categories/${body.result.category_id}/brands/${body.result.brand_id}/remotes/${body.result.remote_index}/rules`, "GET", {}, (codesBody) => {
+                        if (codesBody.success) {
+                            this.log.debug("Received codes. Returning all available codes");
+                            callback(this.getIRCodesFromAPIResponse(codesBody));
+                        } else {
+                            this.log.warn("Failed to get custom codes for fan. Trying to use standard codes...", codesBody.msg);
+                            callback(this.getStandardIRCodesFromAPIResponse(body));
+                        }
+                    });
+                } else {
+                    this.log.error("Failed to get fan key details", body.msg);
+                    callback();
+                }
+            });
+        }
+    }
+
+    private sendFanCommand(command: string | number, cb) {
+        const commandObj = { [this.sendCommandKey]: command };
+        APIInvocationHelper.invokeTuyaIrApi(this.log, this.configuration, this.sendCommandAPIURL, "POST", commandObj, (body) => {
+            cb(body);
+        });
+    }
+
+    private getIRCodeFromKey(item, key: string) {
+        if (item.key_name === key) {
+            return item.key_id || item.key;
+        }
+    }
+
+    private getIRCodesFromAPIResponse(apiResponse) {
+        const ret = { power: null, speedUp: null, swing: null, speedDown: null, vSwing: null };
+        for (let i = 0; i < apiResponse.result.length; i++) {
+            const codeItem = apiResponse.result[i];
+            ret.power       = ret.power || this.getIRCodeFromKey(codeItem, "power");
+            ret.swing       = ret.swing || this.getIRCodeFromKey(codeItem, "swing");
+            ret.speedUp     = ret.speedUp || this.getIRCodeFromKey(codeItem, "speed_up");
+            ret.speedDown   = ret.speedDown || this.getIRCodeFromKey(codeItem, "speed_down");
+            ret.vSwing      = ret.vSwing || this.getIRCodeFromKey(codeItem, "vertical_swing");
+        }
+        return ret;
+    }
+
+    private getStandardIRCodesFromAPIResponse(apiResponse) {
+        const ret = { power: null, speedUp: null, swing: null, speedDown: null, vSwing: null };
+        for (let i = 0; i < apiResponse.result.key_list.length; i++) {
+            const codeItem = apiResponse.result.key_list[i];
+            ret.power       = ret.power || this.getIRCodeFromKey(codeItem, "power");
+            ret.swing       = ret.swing || this.getIRCodeFromKey(codeItem, "swing");
+            ret.speedUp     = ret.speedUp || this.getIRCodeFromKey(codeItem, "speed_up");
+            ret.speedDown   = ret.speedDown || this.getIRCodeFromKey(codeItem, "speed_down");
+            ret.vSwing      = ret.vSwing || this.getIRCodeFromKey(codeItem, "vertical_swing");
+        }
+        return ret;
     }
 }
