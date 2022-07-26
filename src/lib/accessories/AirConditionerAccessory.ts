@@ -10,7 +10,23 @@ import { APIInvocationHelper } from '../api/APIInvocationHelper';
  */
 export class AirConditionerAccessory extends BaseAccessory {
     private service: Service;
-    private modeList = ['Cool', 'Heat', 'Auto'];
+    private modes = [
+        {
+            homebridgeID: 2,
+            tuyaID: 0,
+            type: 'Cool'
+        },
+        {
+            homebridgeID: 1,
+            tuyaID: 1,
+            type: 'Heater'
+        },
+        {
+            homebridgeID: 0,
+            tuyaID: 2,
+            type: 'Auto'
+        }
+    ]
 
     private acStates = {
         On: false,
@@ -78,7 +94,7 @@ export class AirConditionerAccessory extends BaseAccessory {
             } else {
                 this.log.debug(`${this.accessory.displayName} status is ${JSON.stringify(body.result)}`);
                 this.acStates.On = body.result.power === "1" ? true : false;
-                this.acStates.mode = body.result.mode as number;
+                this.acStates.mode = this.modes.find(e => e.tuyaID == body.result.mode as number)?.homebridgeID as number;
                 this.acStates.temperature = body.result.temp as number;
                 this.acStates.fan = body.result.wind as number;
                 this.service.updateCharacteristic(this.platform.Characteristic.Active, this.acStates.On);
@@ -109,15 +125,14 @@ export class AirConditionerAccessory extends BaseAccessory {
 
     setHeatingCoolingState(value: CharacteristicValue) {
         const val = value as number;
-        let command = 2;
-        if (val == this.platform.Characteristic.TargetHeaterCoolerState.COOL) command = 0;
-        if (val == this.platform.Characteristic.TargetHeaterCoolerState.HEAT) command = 1;
+        let mode  = this.modes.find(e => e.homebridgeID == val);
+        let command = mode?.tuyaID as number
 
         this.sendACCommand(this.parentId, this.accessory.context.device.id, "mode", command, (body) => {
             if (!body.success) {
                 this.log.error(`Failed to change AC mode due to error ${body.msg}`);
             } else {
-                this.log.info(`${this.accessory.displayName} mode is ${this.modeList[command]}`);
+                this.log.info(`${this.accessory.displayName} mode is ${mode?.type}`);
                 this.acStates.mode = val;
             }
         });
