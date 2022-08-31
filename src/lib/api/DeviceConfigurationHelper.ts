@@ -40,7 +40,12 @@ export class DeviceConfigurationHelper extends BaseHelper {
             const dev = this.config.configuredRemotes[i];
             this.fetchRemoteDetails(dev.id, (device) => {
                 device.config = this.config;
-                device.diy = dev.diy;
+                device.diy          = dev.diy;
+                device.model        = dev.model;
+                device.brand        = dev.brand;
+                device.hasVSwing    = dev.hasVSwing;
+                device.swingSave	= dev.swingSave;
+                device.swingPower   = dev.swingPower;
                 devs.push(device);
                 if (devs.length == this.config.configuredRemotes.length) {
                     cb(devs);
