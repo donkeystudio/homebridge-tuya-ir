@@ -187,7 +187,7 @@ export class AirConditionerAccessory extends BaseAccessory {
             "value": value
         }
         this.log.debug(JSON.stringify(commandObj));
-        APIInvocationHelper.invokeTuyaIrApi(this.log, this.configuration, this.configuration.apiHost + `/v1.0/infrareds/${deviceId}/air-conditioners/${remoteId}/command`, "POST", commandObj, (body) => {
+        APIInvocationHelper.invokeTuyaIrApi(this.log, this.configuration, this.configuration.apiHost + `/v2.0/infrareds/${deviceId}/air-conditioners/${remoteId}/command`, "POST", commandObj, (body) => {
             cb(body);
         })
     }
