@@ -14,7 +14,23 @@ class AirConditionerAccessory extends BaseAccessory_1.BaseAccessory {
         super(platform, accessory);
         this.platform = platform;
         this.accessory = accessory;
-        this.modeList = ['Cool', 'Heat', 'Auto'];
+        this.modes = [
+            {
+                homebridgeID: 2,
+                tuyaID: 0,
+                type: 'Cool'
+            },
+            {
+                homebridgeID: 1,
+                tuyaID: 1,
+                type: 'Heater'
+            },
+            {
+                homebridgeID: 0,
+                tuyaID: 2,
+                type: 'Auto'
+            }
+        ];
         this.acStates = {
             On: false,
             temperature: 16,
@@ -58,13 +74,14 @@ class AirConditionerAccessory extends BaseAccessory_1.BaseAccessory {
     */
     refreshStatus() {
         this.getACStatus(this.parentId, this.accessory.context.device.id, (body) => {
+            var _a;
             if (!body.success) {
                 this.log.error(`Failed to get AC status due to error ${body.msg}`);
             }
             else {
                 this.log.debug(`${this.accessory.displayName} status is ${JSON.stringify(body.result)}`);
                 this.acStates.On = body.result.power === "1" ? true : false;
-                this.acStates.mode = body.result.mode;
+                this.acStates.mode = (_a = this.modes.find(e => e.tuyaID == body.result.mode)) === null || _a === void 0 ? void 0 : _a.homebridgeID;
                 this.acStates.temperature = body.result.temp;
                 this.acStates.fan = body.result.wind;
                 this.service.updateCharacteristic(this.platform.Characteristic.Active, this.acStates.On);
@@ -94,17 +111,14 @@ class AirConditionerAccessory extends BaseAccessory_1.BaseAccessory {
     }
     setHeatingCoolingState(value) {
         const val = value;
-        let command = 2;
-        if (val == this.platform.Characteristic.TargetHeaterCoolerState.COOL)
-            command = 0;
-        if (val == this.platform.Characteristic.TargetHeaterCoolerState.HEAT)
-            command = 1;
+        let mode = this.modes.find(e => e.homebridgeID == val);
+        let command = mode === null || mode === void 0 ? void 0 : mode.tuyaID;
         this.sendACCommand(this.parentId, this.accessory.context.device.id, "mode", command, (body) => {
             if (!body.success) {
                 this.log.error(`Failed to change AC mode due to error ${body.msg}`);
             }
             else {
-                this.log.info(`${this.accessory.displayName} mode is ${this.modeList[command]}`);
+                this.log.info(`${this.accessory.displayName} mode is ${mode === null || mode === void 0 ? void 0 : mode.type}`);
                 this.acStates.mode = val;
             }
         });
@@ -153,7 +167,7 @@ class AirConditionerAccessory extends BaseAccessory_1.BaseAccessory {
             "value": value
         };
         this.log.debug(JSON.stringify(commandObj));
-        APIInvocationHelper_1.APIInvocationHelper.invokeTuyaIrApi(this.log, this.configuration, this.configuration.apiHost + `/v1.0/infrareds/${deviceId}/air-conditioners/${remoteId}/command`, "POST", commandObj, (body) => {
+        APIInvocationHelper_1.APIInvocationHelper.invokeTuyaIrApi(this.log, this.configuration, this.configuration.apiHost + `/v2.0/infrareds/${deviceId}/air-conditioners/${remoteId}/command`, "POST", commandObj, (body) => {
             cb(body);
         });
     }

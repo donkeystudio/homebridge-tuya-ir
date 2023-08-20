@@ -10,7 +10,7 @@ export declare class AirConditionerAccessory extends BaseAccessory {
     private readonly platform;
     private readonly accessory;
     private service;
-    private modeList;
+    private modes;
     private acStates;
     constructor(platform: TuyaIRPlatform, accessory: PlatformAccessory);
     /**

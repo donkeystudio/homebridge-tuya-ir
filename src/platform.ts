@@ -2,15 +2,12 @@ import { API, DynamicPlatformPlugin, Logger, PlatformAccessory, PlatformConfig, 
 import { TuyaIRDiscovery } from './lib/TuyaIRDiscovery';
 import { AirConditionerAccessory } from './lib/accessories/AirConditionerAccessory';
 import { FanAccessory } from './lib/accessories/FanAccessory';
-import { GenericAccessory } from './lib/accessories/GenericAccessory';
-import { DoItYourselfAccessory } from "./lib/accessories/DoItYourselfAccessory";
 
 const PLATFORM_NAME = 'TuyaIR';
 const PLUGIN_NAME = 'homebridge-tuya-ir';
 const CLASS_DEF = {
   infrared_ac: AirConditionerAccessory,
-  infrared_fan: FanAccessory,
-  qt: DoItYourselfAccessory,
+  infrared_fan: FanAccessory
 };
 
 /**
@@ -87,7 +84,7 @@ export class TuyaIRPlatform implements DynamicPlatformPlugin {
           // something globally unique, but constant, for example, the device serial
           // number or MAC address
           device.ir_id = this.config.smartIR[index].deviceId;
-          const Accessory = CLASS_DEF[device.category] || (device.diy?DoItYourselfAccessory:GenericAccessory);
+          const Accessory = CLASS_DEF[device.category];
           const uuid = this.api.hap.uuid.generate(device.id);
 
           // see if an accessory with the same uuid has already been registered and restored from

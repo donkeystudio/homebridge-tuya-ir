@@ -2,6 +2,7 @@ import { Service, PlatformAccessory, CharacteristicValue } from 'homebridge';
 import { TuyaIRPlatform } from '../../platform';
 import { BaseAccessory } from './BaseAccessory';
 import { APIInvocationHelper } from '../api/APIInvocationHelper';
+import { Command } from '../model/Command';
 
 /**
  * Fan Accessory
@@ -15,8 +16,6 @@ export class FanAccessory extends BaseAccessory {
     private serviceSpeedDown: Service;
     private serviceVSwing: Service;
     private serviceHSwing: Service;
-    private sendCommandAPIURL: string;
-    private sendCommandKey: string;
 
     private fanStates = {
         On: false,
@@ -25,22 +24,21 @@ export class FanAccessory extends BaseAccessory {
         verticalSwing: false
     };
 
-    private powerCommand: number = 1;
-    private speedUpCommand: number = 9367;
-    private speedDownCommand: number = 9367;
-    private swingCommand: number = 9372;
-    private verticalSwingCommand: number = 9372;
-    private swingSave: boolean = false;
-    private hasVSwing: boolean = false;
-    private swingPower:boolean = false;
+    private powerCommand = new Command({key_id: 1});
+    private speedUpCommand = new Command({key_id: 9367});
+    private speedDownCommand = new Command({key_id: 9367});
+    private swingCommand = new Command({key_id: 9372});
+    private verticalSwingCommand = new Command({key_id: 9372});
+    private swingSave = false;
+    private hasVSwing = false;
+    private swingPower = false;
+    private categoryId = "";
 
     constructor(
         private readonly platform: TuyaIRPlatform,
         private readonly accessory: PlatformAccessory,
     ) {
         super(platform, accessory);
-        this.sendCommandAPIURL = accessory.context.device.diy ? `${this.configuration.apiHost}/v1.0/infrareds/${this.parentId}/remotes/${accessory.context.device.id}/learning-codes` : `${this.configuration.apiHost}/v1.0/infrareds/${this.parentId}/remotes/${accessory.context.device.id}/raw/command`;
-        this.sendCommandKey = accessory.context.device.diy ? 'code' : 'raw_key';
 
         this.swingSave 	= accessory.context.device.swingSave;
         this.hasVSwing 	= accessory.context.device.hasVSwing;
@@ -110,28 +108,13 @@ export class FanAccessory extends BaseAccessory {
 		this.serviceVSwing.getCharacteristic(this.platform.Characteristic.On)
 			.onSet(this.setVerticalSwing.bind(this))
 			.onGet(this.getVerticalSwing.bind(this));
-            
-        this.getFanCommands(this.parentId, accessory.context.device.id, accessory.context.device.diy, (commands) => {
-            if (commands) {
-                this.powerCommand 	  		= commands.power;
-                this.speedUpCommand   		= commands.speedUp;
-                this.speedDownCommand 		= commands.speedDown;
-                this.swingCommand 	  		= commands.swing;
-                this.verticalSwingCommand 	= commands.vSwing;
-            } else {
-                this.platform.log.warn(`Failed to get commands for the fan. Defaulting to standard values. These may not work.`);
-            }
-        })
-    }
-
-    setup(platform: TuyaIRPlatform, accessory: PlatformAccessory) {
-
         
+        this.getFanCommands(accessory.context.device.diy);
     }
 
     async setOn(value: CharacteristicValue) 
     {
-        var command = this.powerCommand;
+        const command = this.powerCommand;
 
 		this.sendFanCommand(command, (body) => {
 			if (!body.success) {
@@ -169,8 +152,7 @@ export class FanAccessory extends BaseAccessory {
     }
 
     async setRotationSpeedUp(value: CharacteristicValue) {
-
-    	var command  = this.speedUpCommand;
+        const command  = this.speedUpCommand;
 
         this.sendFanCommand(command, (body) => {
             if (!body.success) {
@@ -195,8 +177,7 @@ export class FanAccessory extends BaseAccessory {
     }
     
     async setRotationSpeedDown(value: CharacteristicValue) {
-
-    	var command  = this.speedDownCommand;
+        const command  = this.speedDownCommand;
 
         this.sendFanCommand(command, (body) => {
             if (!body.success) {
@@ -231,7 +212,7 @@ export class FanAccessory extends BaseAccessory {
                 this.platform.log.info(`${this.accessory.displayName} swing is updated.`);
                 this.fanStates.swing = value as boolean;
                 if (this.swingPower)
-	                this.updateFanActive();
+                    this.updateFanActive();
             }
         });
     }
@@ -243,7 +224,7 @@ export class FanAccessory extends BaseAccessory {
     async setVerticalSwing(value: CharacteristicValue) {
 		if (this.hasVSwing)
 		{
-			var command = this.verticalSwingCommand;
+			const command = this.verticalSwingCommand;
 
 			this.sendFanCommand(command, (body) => {
 				if (!body.success) {
@@ -260,88 +241,112 @@ export class FanAccessory extends BaseAccessory {
     
     updateFanActive()
     {
-    	this.fanStates.On = true;
+        this.fanStates.On = true;
 		this.servicePower.updateCharacteristic(this.platform.Characteristic.On, this.fanStates.On);
     }
     
     setSwingActive()
     {
-    	this.fanStates.swing = true;
-    	//Set and execute Swing
+        this.fanStates.swing = true;
+        //Set and execute Swing
 		this.serviceHSwing.setCharacteristic(this.platform.Characteristic.On, this.fanStates.swing);		
     }
 
-    private getFanCommands(irDeviceId: string, remoteId: string, isDiy = false, callback) {
+    private getFanCommands(isDiy = false) {
         this.log.debug("Getting commands for Fan...");
         if (isDiy) {
             this.log.debug("Getting commands for DIY Fan...");
-            APIInvocationHelper.invokeTuyaIrApi(this.log, this.configuration, this.configuration.apiHost + `/v1.0/infrareds/${irDeviceId}/remotes/${remoteId}/learning-codes`, "GET", {}, (codesBody) => {
+            APIInvocationHelper.invokeTuyaIrApi(this.log, this.configuration, this.configuration.apiHost + `/v2.0/infrareds/${this.parentId}/remotes/${this.deviceId}/learning-codes`, "GET", {}, (codesBody) => {
                 if (codesBody.success) {
                     this.log.debug("Received codes. Returning all available codes");
-                    callback(this.getIRCodesFromAPIResponse(codesBody));
+                    this.getDIYIRCodesFromAPIResponse(codesBody);
                 } else {
                     this.log.error("Failed to get codes for DIY Fan", codesBody.msg);
-                    callback();
                 }
             });
         } else {
-            this.log.debug("First getting brand id and remote id for given device...");
-            APIInvocationHelper.invokeTuyaIrApi(this.log, this.configuration, `${this.configuration.apiHost}/v1.0/infrareds/${irDeviceId}/remotes/${remoteId}/keys`, 'GET', {}, (body) => {
+            this.log.debug("Getting standard keys");
+            APIInvocationHelper.invokeTuyaIrApi(this.log, this.configuration, `${this.configuration.apiHost}/v2.0/infrareds/${this.parentId}/remotes/${this.deviceId}/keys`, 'GET', {}, (body) => {
                 if (body.success) {
-                    this.log.debug(`Found category id: ${body.result.category_id}, brand id: ${body.result.brand_id}, remote id: ${body.result.remote_index}`);
-                    APIInvocationHelper.invokeTuyaIrApi(this.log, this.configuration, this.configuration.apiHost + `/v1.0/infrareds/${irDeviceId}/categories/${body.result.category_id}/brands/${body.result.brand_id}/remotes/${body.result.remote_index}/rules`, "GET", {}, (codesBody) => {
+                    this.getStandardIRCodesFromAPIResponse(body);
+                    this.categoryId = body.result.category_id;
+                    this.log.debug("Getting DIY keys, if any");
+                    APIInvocationHelper.invokeTuyaIrApi(this.log, this.configuration, this.configuration.apiHost + `/v2.0/infrareds/${this.parentId}/remotes/${this.deviceId}/learning-codes`, "GET", {}, (codesBody) => {
                         if (codesBody.success) {
                             this.log.debug("Received codes. Returning all available codes");
-                            callback(this.getIRCodesFromAPIResponse(codesBody));
+                            this.getDIYIRCodesFromAPIResponse(codesBody);
                         } else {
-                            this.log.warn("Failed to get custom codes for fan. Trying to use standard codes...", codesBody.msg);
-                            callback(this.getStandardIRCodesFromAPIResponse(body));
+                            this.log.error("Failed to get codes for DIY Fan", codesBody.msg);
                         }
                     });
                 } else {
                     this.log.error("Failed to get fan key details", body.msg);
-                    callback();
                 }
             });
         }
     }
 
-    private sendFanCommand(command: string | number, cb) {
-        const commandObj = { [this.sendCommandKey]: command };
-        APIInvocationHelper.invokeTuyaIrApi(this.log, this.configuration, this.sendCommandAPIURL, "POST", commandObj, (body) => {
+    private sendFanCommand(command: Command, cb) {
+        const commandObj = {}
+        if (command.isDIY) {
+            commandObj["code"] = command.key.name
+        }
+        else {
+            commandObj["category_id"] = this.categoryId
+            commandObj["key"] = command.key.name
+            commandObj["key_id"] = command.key.id
+        }
+
+        const sendCommandAPIURL = command.isDIY ? `${this.configuration.apiHost}/v2.0/infrareds/${this.parentId}/remotes/${this.deviceId}/learning-codes` : `${this.configuration.apiHost}/v2.0/infrareds/${this.parentId}/remotes/${this.deviceId}/raw/command`;
+
+        APIInvocationHelper.invokeTuyaIrApi(this.log, this.configuration, sendCommandAPIURL, "POST", commandObj, (body) => {
             cb(body);
         });
     }
 
     private getIRCodeFromKey(item, key: string) {
         if (item.key_name === key) {
-            return item.key_id || item.key;
+            if (item.key_id != undefined)
+                return {key_id: item.key_id, key: item.key};
+            else
+                return {key_id: item.id, key: item.code}
         }
+        return {key_id: -1}
     }
 
-    private getIRCodesFromAPIResponse(apiResponse) {
-        const ret = { power: null, speedUp: null, swing: null, speedDown: null, vSwing: null };
+    private getDIYIRCodesFromAPIResponse(apiResponse) {
         for (let i = 0; i < apiResponse.result.length; i++) {
             const codeItem = apiResponse.result[i];
-            ret.power       = ret.power || this.getIRCodeFromKey(codeItem, "power");
-            ret.swing       = ret.swing || this.getIRCodeFromKey(codeItem, "swing");
-            ret.speedUp     = ret.speedUp || this.getIRCodeFromKey(codeItem, "speed_up");
-            ret.speedDown   = ret.speedDown || this.getIRCodeFromKey(codeItem, "speed_down");
-            ret.vSwing      = ret.vSwing || this.getIRCodeFromKey(codeItem, "vertical_swing");
+            this.process_commands(codeItem, true);
         }
-        return ret;
     }
 
     private getStandardIRCodesFromAPIResponse(apiResponse) {
-        const ret = { power: null, speedUp: null, swing: null, speedDown: null, vSwing: null };
         for (let i = 0; i < apiResponse.result.key_list.length; i++) {
             const codeItem = apiResponse.result.key_list[i];
-            ret.power       = ret.power || this.getIRCodeFromKey(codeItem, "power");
-            ret.swing       = ret.swing || this.getIRCodeFromKey(codeItem, "swing");
-            ret.speedUp     = ret.speedUp || this.getIRCodeFromKey(codeItem, "speed_up");
-            ret.speedDown   = ret.speedDown || this.getIRCodeFromKey(codeItem, "speed_down");
-            ret.vSwing      = ret.vSwing || this.getIRCodeFromKey(codeItem, "vertical_swing");
+            this.process_commands(codeItem, false);
         }
-        return ret;
+    }
+
+    private process_commands(codeItem, isDIY) {
+        let key = this.getIRCodeFromKey(codeItem, "power");
+        if (key.key_id != -1)
+            this.powerCommand = new Command(key, isDIY);
+
+        key = this.getIRCodeFromKey(codeItem, "swing");
+        if (key.key_id != -1)
+            this.swingCommand = new Command(key, isDIY);
+        
+        key = this.getIRCodeFromKey(codeItem, "speed_up");
+        if (key.key_id != -1)
+            this.speedUpCommand = new Command(key, isDIY);
+        
+        key = this.getIRCodeFromKey(codeItem, "speed_down");
+        if (key.key_id != -1)
+            this.speedDownCommand = new Command(key, isDIY);
+
+        key = this.getIRCodeFromKey(codeItem, "vertical_swing");
+        if (key.key_id != -1)
+            this.verticalSwingCommand = new Command(key, isDIY);
     }
 }
